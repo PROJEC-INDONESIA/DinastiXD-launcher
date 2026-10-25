@@ -1,7 +1,7 @@
 {
   "name": "dinastixd-launcher",
-  "version": "0.1.2",
-  "description": "DinastiXD Launcher desktop MVP",
+  "version": "0.2.0",
+  "description": "DinastiXD Minecraft Java Launcher",
   "author": "DinastiXD",
   "main": "src/main.js",
   "scripts": {
@@ -34,5 +34,14 @@
   "allowScripts": {
     "electron": true,
     "electron-winstaller": true
+  },
+  "dependencies": {
+    "@xmcl/core": "^2.15.1",
+    "@xmcl/installer": "^6.1.2",
+    "msmc": "^5.0.5"
+  },
+  "overrides": {
+    "@xmcl/unzip": "2.1.2",
+    "undici": "7.30.1"
   }
 }

@@ -1,7 +1,15 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { Auth } = require('msmc');
 const { resolveInsideRoot } = require('./minecraft-path');
+const {
+  installOfficialVersion,
+  launchOfficialVersion,
+  listOfficialVersions
+} = require('./minecraft-service');
+
+let minecraftAccount;
 
 function getMinecraftDirectory() {
   return path.join(app.getPath('appData'), '.minecraft');
@@ -45,6 +53,82 @@ ipcMain.handle('launcher:open-minecraft-folder', async () => {
   const minecraftDirectory = getMinecraftDirectory();
   await fs.mkdir(minecraftDirectory, { recursive: true });
   return shell.openPath(minecraftDirectory);
+});
+
+ipcMain.handle('launcher:get-versions', async () => listOfficialVersions());
+ipcMain.handle('launcher:get-account', async () => minecraftAccount?.profile
+  ? { name: minecraftAccount.profile.name, id: minecraftAccount.profile.id }
+  : null);
+
+ipcMain.handle('launcher:version-installed', async (_event, versionId) => {
+  const versionDirectory = path.join(getMinecraftDirectory(), 'versions', versionId);
+  try {
+    await Promise.all([
+      fs.access(path.join(versionDirectory, `${versionId}.json`)),
+      fs.access(path.join(versionDirectory, `${versionId}.jar`))
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('launcher:install-version', async (event, versionId) => {
+  event.sender.send('launcher:progress', { stage: 'install', message: `Menyiapkan Minecraft ${versionId}...` });
+  try {
+    const result = await installOfficialVersion(getMinecraftDirectory(), versionId, (message) => {
+      event.sender.send('launcher:progress', { stage: 'install', message });
+    });
+    event.sender.send('launcher:progress', { stage: 'installed', message: `Minecraft ${result.version} siap dimainkan.` });
+    return result;
+  } catch (error) {
+    event.sender.send('launcher:progress', { stage: 'error', message: error.message });
+    throw error;
+  }
+});
+
+ipcMain.handle('launcher:login-microsoft', async () => {
+  const auth = new Auth('select_account');
+  const xbox = await auth.launch('electron', { width: 520, height: 700, resizable: false });
+  const account = await xbox.getMinecraft();
+  const entitlements = await account.entitlements();
+  const ownsJava = entitlements.includes('game_minecraft') || entitlements.includes('product_minecraft');
+
+  if (!account.profile || !ownsJava) {
+    throw new Error('Akun Microsoft ini tidak memiliki Minecraft Java Edition.');
+  }
+
+  minecraftAccount = account;
+  return { name: account.profile.name, id: account.profile.id };
+});
+
+ipcMain.handle('launcher:logout-microsoft', async () => {
+  minecraftAccount = undefined;
+});
+
+ipcMain.handle('launcher:launch-game', async (event, versionId) => {
+  if (!minecraftAccount) throw new Error('Login Microsoft terlebih dahulu.');
+  if (!minecraftAccount.validate()) minecraftAccount = await minecraftAccount.refresh();
+
+  event.sender.send('launcher:progress', { stage: 'launch', message: `Menjalankan Minecraft ${versionId}...` });
+  const { child, javaMajor } = await launchOfficialVersion({
+    gameDirectory: getMinecraftDirectory(),
+    versionId,
+    account: minecraftAccount
+  });
+
+  child.once('error', (error) => {
+    if (!event.sender.isDestroyed()) event.sender.send('launcher:progress', { stage: 'error', message: error.message });
+  });
+  child.once('exit', (code) => {
+    if (!event.sender.isDestroyed()) event.sender.send('launcher:progress', {
+      stage: 'game-exit',
+      message: code === 0 ? 'Minecraft ditutup.' : `Minecraft berhenti dengan kode ${code}.`
+    });
+  });
+
+  event.sender.send('launcher:progress', { stage: 'playing', message: `Game dimulai dengan Java ${javaMajor}.` });
+  return { started: true, javaMajor };
 });
 
 ipcMain.handle('launcher:list-files', async (_event, relativeDirectory = '') => {

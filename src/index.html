@@ -33,11 +33,11 @@
         <div class="sidebar-bottom">
           <div class="account-card">
             <div class="avatar">D</div>
-            <div class="account-copy"><strong>Mode offline</strong><small>Profil lokal</small></div>
-            <span class="online-dot" aria-label="Lokal"></span>
+            <div class="account-copy"><strong id="sidebar-account-name">Belum login</strong><small id="sidebar-account-provider">Akun Microsoft</small></div>
+            <span class="online-dot" id="account-indicator" aria-label="Belum login"></span>
           </div>
           <button class="nav-item settings-link" data-view="settings"><span class="nav-icon">⚙</span>Pengaturan</button>
-          <div class="build-label"><span class="status-dot"></span>PREVIEW <span>v0.1.0</span></div>
+          <div class="build-label"><span class="status-dot"></span>VANILLA <span>v0.2.0</span></div>
         </div>
       </aside>
 
@@ -47,7 +47,7 @@
           <div class="topbar-actions">
             <span class="platform-pill"><span class="status-dot"></span>JAVA EDITION</span>
             <button class="icon-button" id="open-folder" aria-label="Buka folder Minecraft" title="Buka folder .minecraft">⌁</button>
-            <button class="profile-button" id="profile-button"><span class="avatar small-avatar">D</span><span>Profil lokal</span><span class="chevron">⌄</span></button>
+            <button class="profile-button" id="profile-button"><span class="avatar small-avatar">D</span><span>Login Microsoft</span><span class="chevron">⌄</span></button>
           </div>
         </header>
 
@@ -64,7 +64,7 @@
               <h2>Dunia baru.<br /><em>Caramu sendiri.</em></h2>
               <p>Siapkan versi favoritmu dan lanjutkan petualangan.</p>
               <div class="hero-buttons">
-                <button class="play-button" id="play-button"><span class="play-triangle">▶</span> Mulai bermain</button>
+                <button class="play-button" id="play-button"><span class="play-triangle">▶</span><span id="play-button-label">Login &amp; main</span></button>
                 <button class="hero-secondary" data-view="library">Library <span>↗</span></button>
               </div>
             </div>
@@ -83,11 +83,11 @@
             <section class="play-section">
               <div class="section-heading"><div><p class="eyebrow">PENGATURAN CEPAT</p><h2>Siapkan sesi</h2></div><span class="setup-note">PERUBAHAN DISIMPAN LOKAL</span></div>
               <div class="setup-panel">
-                <label class="field-block version-field"><span class="field-label">VERSI GAME</span><select id="version-select"><option value="1.21.4">1.21.4</option><option value="1.20.1">1.20.1</option><option value="1.16.5">1.16.5</option></select></label>
-                <div class="field-block loader-field"><span class="field-label">LOADER</span><div class="segmented" id="loader-options" role="group" aria-label="Pilih loader"><button class="selected" data-loader="Vanilla">Vanilla</button><button data-loader="Fabric">Fabric</button><button data-loader="Forge">Forge</button><button data-loader="NeoForge">NeoForge</button></div></div>
+                <label class="field-block version-field"><span class="field-label">VERSI GAME</span><select id="version-select"><option value="">Memuat versi resmi...</option></select></label>
+                <div class="field-block loader-field"><span class="field-label">LOADER</span><div class="segmented" id="loader-options" role="group" aria-label="Pilih loader"><button class="selected" data-loader="Vanilla">Vanilla</button><button disabled title="Belum tersedia">Fabric</button><button disabled title="Belum tersedia">Forge</button><button disabled title="Belum tersedia">NeoForge</button></div></div>
                 <div class="setup-footer"><span><span class="status-dot muted-dot"></span><span id="selection-summary">Vanilla · 1.21.4</span></span><button class="manage-button" id="open-folder-secondary">Kelola file <span>↗</span></button></div>
               </div>
-              <div class="feature-notice"><span class="notice-mark">i</span><p>Instalasi dan peluncuran game belum aktif di preview ini. Pilihan di atas belum mengunduh atau mengubah file Minecraft.</p></div>
+              <div class="feature-notice"><span class="notice-mark">i</span><p id="game-status-text">Game Vanilla resmi diunduh dari Mojang. Login Microsoft dengan kepemilikan Java Edition diperlukan; Java runtime yang sesuai harus tersedia.</p></div>
             </section>
 
             <aside class="activity-section">
@@ -101,7 +101,7 @@
             </aside>
           </div>
 
-          <footer class="page-footer"><span>DINASTIXD LAUNCHER <b>·</b> PREVIEW</span><span id="footer-path">Folder .minecraft belum diketahui</span></footer>
+          <footer class="page-footer"><span>DINASTIXD LAUNCHER <b>·</b> JAVA EDITION</span><span id="footer-path">Folder .minecraft belum diketahui</span></footer>
         </section>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
       </main>

@@ -24,6 +24,7 @@ const toast = document.querySelector('#toast');
 const availableLoaders = ['Vanilla', 'Fabric', 'Forge', 'NeoForge'];
 const savedLoader = localStorage.getItem('dinasti.selectedLoader');
 let selectedLoader = availableLoaders.includes(savedLoader) ? savedLoader : 'Vanilla';
+let currentAccount;
 let toastTimer;
 
 function showToast(message, isError = false) {
@@ -59,7 +60,7 @@ function showView(view) {
   });
   pageContent.innerHTML = `
     <div class="welcome-row">
-      <div><p class="eyebrow">DINASTIXD LAUNCHER <span class="eyebrow-line"></span> PREVIEW</p><h1>${title}</h1></div>
+      <div><p class="eyebrow">DINASTIXD LAUNCHER <span class="eyebrow-line"></span> ${view === 'settings' ? 'PENGATURAN' : 'SEGERA HADIR'}</p><h1>${title}</h1></div>
       <button class="text-button" data-action="open-folder"><span>⌁</span> Buka folder game</button>
     </div>
     <section class="empty-view"><div class="empty-content">
@@ -67,7 +68,7 @@ function showView(view) {
       <h2>${heading}</h2><p>${description}</p>
       <button data-action="open-folder">Buka folder .minecraft</button>
     </div></section>
-    <footer class="page-footer"><span>DINASTIXD LAUNCHER <b>·</b> PREVIEW</span><span>Fitur terhubung akan ditampilkan di sini</span></footer>`;
+    <footer class="page-footer"><span>DINASTIXD LAUNCHER <b>·</b> JAVA EDITION</span><span>Fitur ini belum tersedia</span></footer>`;
 
   pageContent.querySelectorAll('[data-action="open-folder"]').forEach((button) => {
     button.addEventListener('click', openMinecraftFolder);
@@ -102,7 +103,7 @@ async function renderFileBrowser(relativeDirectory = '') {
       <div class="file-toolbar"><div class="file-path">${breadcrumbPath}</div><button class="file-refresh" data-action="refresh-files" title="Muat ulang" aria-label="Muat ulang">↻</button></div>
       <div class="file-columns"><div class="file-list" id="file-list"><div class="file-empty">Memuat file...</div></div><div class="file-preview" id="file-preview"><span class="preview-placeholder">Pilih file teks untuk melihat pratinjaunya.</span></div></div>
     </section>
-    <footer class="page-footer"><span>DINASTIXD LAUNCHER <b>·</b> PREVIEW</span><span>${breadcrumbPath}</span></footer>`;
+    <footer class="page-footer"><span>DINASTIXD LAUNCHER <b>·</b> JAVA EDITION</span><span>${breadcrumbPath}</span></footer>`;
 
   pageContent.querySelector('[data-action="open-folder"]').addEventListener('click', openMinecraftFolder);
   pageContent.querySelector('[data-action="refresh-files"]').addEventListener('click', () => renderFileBrowser(relativeDirectory));
@@ -182,13 +183,13 @@ document.querySelector('#loader-options').addEventListener('click', (event) => {
   updateSelection();
 });
 
-document.querySelector('#version-select').addEventListener('change', updateSelection);
+document.querySelector('#version-select').addEventListener('change', () => {
+  updateSelection();
+  updateVersionStatus();
+});
 
 const versionSelect = document.querySelector('#version-select');
 const savedVersion = localStorage.getItem('dinasti.selectedVersion');
-if ([...versionSelect.options].some((option) => option.value === savedVersion)) {
-  versionSelect.value = savedVersion;
-}
 document.querySelectorAll('#loader-options button').forEach((button) => {
   button.classList.toggle('selected', button.dataset.loader === selectedLoader);
 });
@@ -202,20 +203,117 @@ function updateSelection() {
 
 updateSelection();
 
+async function loadVersions() {
+  versionSelect.disabled = true;
+  try {
+    const manifest = await window.dinasti.getVersions();
+    versionSelect.replaceChildren(...manifest.versions.map((version) => {
+      const option = document.createElement('option');
+      option.value = version.id;
+      option.textContent = `${version.id}${version.id === manifest.latest ? ' · Terbaru' : ''}`;
+      return option;
+    }));
+    const preferredVersion = manifest.versions.some((version) => version.id === savedVersion)
+      ? savedVersion
+      : manifest.latest;
+    versionSelect.value = preferredVersion;
+    versionSelect.disabled = false;
+    updateSelection();
+    const installed = await window.dinasti.isVersionInstalled(preferredVersion);
+    setGameStatus(installed ? `Minecraft ${preferredVersion} siap dimainkan.` : `Minecraft ${preferredVersion} belum terpasang. Klik Main untuk mengunduh file resmi.`);
+  } catch (error) {
+    versionSelect.replaceChildren(new Option('Versi Mojang tidak dapat dimuat', ''));
+    setGameStatus(`Tidak dapat mengambil manifest Mojang: ${error.message}`);
+  }
+}
+
+function setGameStatus(message) {
+  document.querySelector('#game-status-text').textContent = message;
+}
+
+async function updateVersionStatus() {
+  const version = versionSelect.value;
+  if (!version) return;
+  try {
+    const installed = await window.dinasti.isVersionInstalled(version);
+    setGameStatus(installed ? `Minecraft ${version} siap dimainkan.` : `Minecraft ${version} belum terpasang. Klik Main untuk mengunduh file resmi.`);
+  } catch (error) {
+    setGameStatus(error.message);
+  }
+}
+
+async function refreshAccount() {
+  currentAccount = await window.dinasti.getAccount();
+  const name = currentAccount?.name ?? 'Belum login';
+  document.querySelector('#sidebar-account-name').textContent = name;
+  document.querySelector('#sidebar-account-provider').textContent = currentAccount ? 'Microsoft · Java Edition' : 'Akun Microsoft';
+  document.querySelector('#account-indicator').setAttribute('aria-label', currentAccount ? 'Sudah login' : 'Belum login');
+  document.querySelector('#profile-button').querySelector('span:nth-child(2)').textContent = currentAccount ? 'Keluar' : 'Login Microsoft';
+  document.querySelector('#play-button-label').textContent = currentAccount ? 'Mainkan Minecraft' : 'Login & main';
+}
+
+async function loginMicrosoft() {
+  setGameStatus('Membuka login Microsoft resmi...');
+  try {
+    const account = await window.dinasti.loginMicrosoft();
+    await refreshAccount();
+    showToast(`Login berhasil: ${account.name}`);
+    return true;
+  } catch (error) {
+    setGameStatus(error.message);
+    showToast(error.message, true);
+    return false;
+  }
+}
+
+document.querySelector('#play-button').addEventListener('click', async () => {
+  const version = versionSelect.value;
+  if (!version || versionSelect.disabled) {
+    showToast('Versi Minecraft resmi belum siap.', true);
+    return;
+  }
+
+  const button = document.querySelector('#play-button');
+  button.disabled = true;
+  try {
+    if (!currentAccount && !await loginMicrosoft()) return;
+    const installed = await window.dinasti.isVersionInstalled(version);
+    if (!installed) await window.dinasti.installVersion(version);
+    const result = await window.dinasti.launchGame(version);
+    setGameStatus(`Minecraft berjalan dengan Java ${result.javaMajor}. Kamu bisa kembali ke launcher saat bermain.`);
+  } catch (error) {
+    setGameStatus(error.message);
+    showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+    await refreshAccount();
+  }
+});
+
+document.querySelector('#profile-button').addEventListener('click', async () => {
+  if (!currentAccount) {
+    await loginMicrosoft();
+    return;
+  }
+  await window.dinasti.logoutMicrosoft();
+  await refreshAccount();
+  showToast('Keluar dari akun Microsoft.');
+});
+
+window.dinasti.onProgress(({ stage, message }) => {
+  setGameStatus(message);
+  if (stage === 'error') showToast(message, true);
+});
+
+refreshAccount().catch(() => {});
+loadVersions();
+
 document.querySelector('#welcome-date').textContent = new Intl.DateTimeFormat('id-ID', {
   weekday: 'long',
   day: '2-digit',
   month: 'long',
   year: 'numeric'
 }).format(new Date()).toUpperCase();
-
-document.querySelector('#play-button').addEventListener('click', () => {
-  showToast('Peluncuran game belum tersedia di preview ini.');
-});
-
-document.querySelector('#profile-button').addEventListener('click', () => {
-  showToast('Login Microsoft dan Ely.by belum terhubung.');
-});
 
 window.dinasti.getStatus().then(({ minecraftDirectory, folderExists }) => {
   document.querySelector('#folder-status').textContent = folderExists ? 'Terdeteksi' : 'Belum dibuat';
