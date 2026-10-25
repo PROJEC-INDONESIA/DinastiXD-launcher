@@ -1,0 +1,38 @@
+{
+  "name": "dinastixd-launcher",
+  "version": "0.1.0",
+  "description": "DinastiXD Launcher desktop MVP",
+  "author": "DinastiXD",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "dist:win": "electron-builder --win nsis --x64 --ia32"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "id.dinastixd.launcher",
+    "productName": "DinastiXD Launcher",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "DinastiXD-Launcher-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "allowScripts": {
+    "electron": true,
+    "electron-winstaller": true
+  }
+}
