@@ -10,7 +10,7 @@ test('resolves an existing file inside the game directory', async (context) => {
   context.after(() => fs.rm(root, { recursive: true, force: true }));
   await fs.writeFile(path.join(root, 'options.txt'), 'safe');
 
-  assert.equal(await resolveInsideRoot(root, 'options.txt'), path.join(root, 'options.txt'));
+  assert.equal(await resolveInsideRoot(root, 'options.txt'), await fs.realpath(path.join(root, 'options.txt')));
 });
 
 test('rejects traversal outside the game directory', async (context) => {
