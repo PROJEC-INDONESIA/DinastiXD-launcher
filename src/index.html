@@ -37,7 +37,7 @@
             <span class="online-dot" id="account-indicator" aria-label="Belum login"></span>
           </div>
           <button class="nav-item settings-link" data-view="settings"><span class="nav-icon">⚙</span>Pengaturan</button>
-          <div class="build-label"><span class="status-dot"></span>VANILLA <span>v0.2.0</span></div>
+          <div class="build-label"><span class="status-dot"></span>JAVA EDITION <span>v0.4.0</span></div>
         </div>
       </aside>
 
@@ -47,6 +47,7 @@
           <div class="topbar-actions">
             <span class="platform-pill"><span class="status-dot"></span>JAVA EDITION</span>
             <button class="icon-button" id="open-folder" aria-label="Buka folder Minecraft" title="Buka folder .minecraft">⌁</button>
+            <button class="profile-button ely-login-button" id="ely-login-button">Login Ely.by</button>
             <button class="profile-button" id="profile-button"><span class="avatar small-avatar">D</span><span>Login Microsoft</span><span class="chevron">⌄</span></button>
           </div>
         </header>
@@ -84,7 +85,8 @@
               <div class="section-heading"><div><p class="eyebrow">PENGATURAN CEPAT</p><h2>Siapkan sesi</h2></div><span class="setup-note">PERUBAHAN DISIMPAN LOKAL</span></div>
               <div class="setup-panel">
                 <label class="field-block version-field"><span class="field-label">VERSI GAME</span><select id="version-select"><option value="">Memuat versi resmi...</option></select></label>
-                <div class="field-block loader-field"><span class="field-label">LOADER</span><div class="segmented" id="loader-options" role="group" aria-label="Pilih loader"><button class="selected" data-loader="Vanilla">Vanilla</button><button disabled title="Belum tersedia">Fabric</button><button disabled title="Belum tersedia">Forge</button><button disabled title="Belum tersedia">NeoForge</button></div></div>
+                <div class="field-block loader-field"><span class="field-label">LOADER</span><div class="segmented" id="loader-options" role="group" aria-label="Pilih loader"><button class="selected" data-loader="Vanilla">Vanilla</button><button data-loader="Fabric">Fabric</button><button data-loader="Forge">Forge</button><button data-loader="NeoForge">NeoForge</button></div></div>
+                <label class="field-block loader-version-field" id="loader-version-field" hidden><span class="field-label">VERSI LOADER</span><select id="loader-version-select" disabled><option value="">Pilih Minecraft terlebih dahulu</option></select></label>
                 <div class="setup-footer"><span><span class="status-dot muted-dot"></span><span id="selection-summary">Vanilla · 1.21.4</span></span><button class="manage-button" id="open-folder-secondary">Kelola file <span>↗</span></button></div>
               </div>
               <div class="feature-notice"><span class="notice-mark">i</span><p id="game-status-text">Game Vanilla resmi diunduh dari Mojang. Login Microsoft dengan kepemilikan Java Edition diperlukan; Java runtime yang sesuai harus tersedia.</p></div>
@@ -103,6 +105,17 @@
 
           <footer class="page-footer"><span>DINASTIXD LAUNCHER <b>·</b> JAVA EDITION</span><span id="footer-path">Folder .minecraft belum diketahui</span></footer>
         </section>
+        <dialog class="auth-dialog" id="ely-login-dialog">
+          <form id="ely-login-form">
+            <p class="eyebrow">AUTENTIKASI YGGDRASIL</p>
+            <h2>Login Ely.by</h2>
+            <label>Username atau email<input name="username" type="text" autocomplete="username" required /></label>
+            <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+            <label>Kode 2FA (opsional)<input name="twoFactorToken" type="text" inputmode="numeric" autocomplete="one-time-code" /></label>
+            <p class="auth-note">Password hanya dikirim lewat HTTPS ke Ely.by dan tidak disimpan oleh launcher.</p>
+            <div class="auth-actions"><button class="manage-button" type="button" id="ely-cancel">Batal</button><button class="play-button" type="submit" id="ely-submit">Login</button></div>
+          </form>
+        </dialog>
         <div class="toast" id="toast" role="status" aria-live="polite"></div>
       </main>
     </div>

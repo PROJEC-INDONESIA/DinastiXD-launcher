@@ -1,11 +1,23 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron');
+const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { Auth } = require('msmc');
+const { authenticateEly, invalidateEly, validateEly } = require('./ely-auth');
 const { resolveInsideRoot } = require('./minecraft-path');
 const {
+  installCurseForgeProject,
+  installCurseForgeResource,
+  installModrinthResource,
+  installModrinthProject,
+  searchCurseForgeContent,
+  searchModrinthContent
+} = require('./mod-platforms');
+const {
   installOfficialVersion,
+  installSelectedVersion,
   launchOfficialVersion,
+  listLoaderVersions,
   listOfficialVersions
 } = require('./minecraft-service');
 
@@ -13,6 +25,48 @@ let minecraftAccount;
 
 function getMinecraftDirectory() {
   return path.join(app.getPath('appData'), '.minecraft');
+}
+
+function getInstanceKey({ minecraftVersion, loader = 'Vanilla', loaderVersion = '' }) {
+  return JSON.stringify([minecraftVersion, loader, loaderVersion]);
+}
+
+function getInstanceDirectory(selection) {
+  if ((selection.loader || 'Vanilla') === 'Vanilla') return getMinecraftDirectory();
+  const id = crypto.createHash('sha256').update(getInstanceKey(selection)).digest('hex').slice(0, 12);
+  const name = `${selection.minecraftVersion}-${selection.loader.toLowerCase()}-${selection.loaderVersion}`.replace(/[^a-zA-Z0-9.-]/g, '_');
+  return path.join(getMinecraftDirectory(), 'dinastixd-instances', `${name}-${id}`);
+}
+
+async function getInstalledInstances() {
+  try {
+    return JSON.parse(await fs.readFile(path.join(app.getPath('userData'), 'instances.json'), 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+async function saveInstalledInstance(selection, installedVersion) {
+  const instances = await getInstalledInstances();
+  instances[getInstanceKey(selection)] = installedVersion;
+  const file = path.join(app.getPath('userData'), 'instances.json');
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(instances, null, 2), 'utf8');
+}
+
+function getCurseForgeKeyPath() {
+  return path.join(app.getPath('userData'), 'curseforge-key.bin');
+}
+
+async function getCurseForgeKey() {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('Penyimpanan terenkripsi OS tidak tersedia.');
+    const encrypted = await fs.readFile(getCurseForgeKeyPath());
+    return safeStorage.decryptString(encrypted);
+  } catch (error) {
+    if (error.code === 'ENOENT') return '';
+    throw error;
+  }
 }
 
 async function createWindow() {
@@ -56,30 +110,78 @@ ipcMain.handle('launcher:open-minecraft-folder', async () => {
 });
 
 ipcMain.handle('launcher:get-versions', async () => listOfficialVersions());
+ipcMain.handle('launcher:get-loader-versions', async (_event, minecraftVersion, loader) => {
+  return listLoaderVersions(minecraftVersion, loader);
+});
+ipcMain.handle('launcher:search-content', async (_event, { source, query, selection, contentType = 'mod' }) => {
+  if (source === 'Modrinth') return searchModrinthContent(query, selection, contentType);
+  if (source === 'CurseForge') return searchCurseForgeContent(query, selection, await getCurseForgeKey(), contentType);
+  throw new Error('Sumber mod tidak dikenal.');
+});
+ipcMain.handle('launcher:install-content', async (_event, { source, id, selection, contentType = 'mod' }) => {
+  if (!selection) throw new Error('Pilih instance Minecraft terlebih dahulu.');
+  if (contentType === 'mod' && selection.loader === 'Vanilla') {
+    throw new Error('Pilih dan pasang Fabric, Forge, atau NeoForge sebelum memasang mod.');
+  }
+  const instanceDirectory = getInstanceDirectory(selection);
+  const contentDirectory = {
+    mod: 'mods',
+    resourcepack: 'resourcepacks',
+    shader: 'shaderpacks'
+  }[contentType];
+  if (!contentDirectory) throw new Error('Jenis konten belum didukung.');
+  const directory = path.join(instanceDirectory, contentDirectory);
+  await fs.mkdir(directory, { recursive: true });
+  const safeDirectory = await resolveInsideRoot(instanceDirectory, contentDirectory);
+  if (source === 'Modrinth') {
+    return contentType === 'mod'
+      ? installModrinthProject(id, selection, safeDirectory)
+      : installModrinthResource(id, selection, safeDirectory, contentType);
+  }
+  if (source === 'CurseForge') {
+    const key = await getCurseForgeKey();
+    return contentType === 'mod'
+      ? installCurseForgeProject(id, selection, safeDirectory, key)
+      : installCurseForgeResource(id, selection, safeDirectory, key, contentType);
+  }
+  throw new Error('Sumber mod tidak dikenal.');
+});
+ipcMain.handle('launcher:curseforge-key-status', async () => Boolean(await getCurseForgeKey()));
+ipcMain.handle('launcher:save-curseforge-key', async (_event, apiKey) => {
+  if (typeof apiKey !== 'string' || apiKey.trim().length < 20) throw new Error('API key CurseForge tidak valid.');
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Penyimpanan terenkripsi OS tidak tersedia.');
+  const file = getCurseForgeKeyPath();
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, safeStorage.encryptString(apiKey.trim()), { mode: 0o600 });
+  return true;
+});
 ipcMain.handle('launcher:get-account', async () => minecraftAccount?.profile
-  ? { name: minecraftAccount.profile.name, id: minecraftAccount.profile.id }
+  ? { name: minecraftAccount.profile.name, id: minecraftAccount.profile.id, provider: minecraftAccount.provider }
   : null);
 
-ipcMain.handle('launcher:version-installed', async (_event, versionId) => {
-  const versionDirectory = path.join(getMinecraftDirectory(), 'versions', versionId);
+ipcMain.handle('launcher:version-installed', async (_event, selection) => {
+  const chosen = typeof selection === 'string' ? { minecraftVersion: selection, loader: 'Vanilla' } : selection;
+  const instances = await getInstalledInstances();
+  const instanceVersion = instances[getInstanceKey(chosen)] || chosen.minecraftVersion;
+  const versionDirectory = path.join(getInstanceDirectory(chosen), 'versions', instanceVersion);
   try {
-    await Promise.all([
-      fs.access(path.join(versionDirectory, `${versionId}.json`)),
-      fs.access(path.join(versionDirectory, `${versionId}.jar`))
-    ]);
+    await fs.access(path.join(versionDirectory, `${instanceVersion}.json`));
+    if ((chosen.loader || 'Vanilla') === 'Vanilla') await fs.access(path.join(versionDirectory, `${instanceVersion}.jar`));
     return true;
   } catch {
     return false;
   }
 });
 
-ipcMain.handle('launcher:install-version', async (event, versionId) => {
-  event.sender.send('launcher:progress', { stage: 'install', message: `Menyiapkan Minecraft ${versionId}...` });
+ipcMain.handle('launcher:install-version', async (event, selection) => {
+  const { minecraftVersion, loader = 'Vanilla', loaderVersion = '' } = selection;
+  event.sender.send('launcher:progress', { stage: 'install', message: `Menyiapkan Minecraft ${minecraftVersion}...` });
   try {
-    const result = await installOfficialVersion(getMinecraftDirectory(), versionId, (message) => {
+    const result = await installSelectedVersion(getInstanceDirectory(selection), minecraftVersion, loader, loaderVersion, (message) => {
       event.sender.send('launcher:progress', { stage: 'install', message });
     });
-    event.sender.send('launcher:progress', { stage: 'installed', message: `Minecraft ${result.version} siap dimainkan.` });
+    await saveInstalledInstance(selection, result.version);
+    event.sender.send('launcher:progress', { stage: 'installed', message: `${loader} ${loaderVersion || minecraftVersion} siap dimainkan.` });
     return result;
   } catch (error) {
     event.sender.send('launcher:progress', { stage: 'error', message: error.message });
@@ -99,22 +201,36 @@ ipcMain.handle('launcher:login-microsoft', async () => {
   }
 
   minecraftAccount = account;
+  minecraftAccount.provider = 'Microsoft';
   return { name: account.profile.name, id: account.profile.id };
 });
 
+ipcMain.handle('launcher:login-ely', async (_event, { username, password, twoFactorToken }) => {
+  minecraftAccount = await authenticateEly(username, password, twoFactorToken);
+  return { name: minecraftAccount.profile.name, id: minecraftAccount.profile.id, provider: minecraftAccount.provider };
+});
+
 ipcMain.handle('launcher:logout-microsoft', async () => {
+  if (minecraftAccount?.provider === 'Ely.by') await invalidateEly(minecraftAccount);
   minecraftAccount = undefined;
 });
 
-ipcMain.handle('launcher:launch-game', async (event, versionId) => {
+ipcMain.handle('launcher:launch-game', async (event, selection) => {
   if (!minecraftAccount) throw new Error('Login Microsoft terlebih dahulu.');
-  if (!minecraftAccount.validate()) minecraftAccount = await minecraftAccount.refresh();
+  if (minecraftAccount.provider === 'Ely.by') {
+    if (!await validateEly(minecraftAccount)) throw new Error('Sesi Ely.by kedaluwarsa. Login kembali sebelum bermain.');
+  } else if (!minecraftAccount.validate()) {
+    minecraftAccount = await minecraftAccount.refresh();
+  }
 
+  const instances = await getInstalledInstances();
+  const versionId = instances[getInstanceKey(selection)] || selection.minecraftVersion;
   event.sender.send('launcher:progress', { stage: 'launch', message: `Menjalankan Minecraft ${versionId}...` });
   const { child, javaMajor } = await launchOfficialVersion({
-    gameDirectory: getMinecraftDirectory(),
+    gameDirectory: getInstanceDirectory(selection),
     versionId,
-    account: minecraftAccount
+    account: minecraftAccount,
+    onStatus: (message) => event.sender.send('launcher:progress', { stage: 'launch', message })
   });
 
   child.once('error', (error) => {
